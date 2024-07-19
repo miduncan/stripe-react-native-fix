@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   AddressDetails,
@@ -9,6 +9,7 @@ import {
   AddressSheet,
   AddressSheetError,
   CardBrand,
+  PaymentMethod,
 } from '@stripe/stripe-react-native';
 import Button from '../components/Button';
 import PaymentScreen from '../components/PaymentScreen';
@@ -22,6 +23,7 @@ export default function PaymentsUICompleteScreen() {
   const [loading, setLoading] = useState(false);
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>();
+  const errorCounter = useRef<number>(0);
 
   const fetchPaymentSheetParams = async () => {
     const response = await fetch(`${API_URL}/payment-sheet`, {
@@ -74,6 +76,23 @@ export default function PaymentsUICompleteScreen() {
     setLoading(false);
   };
 
+  const confirmHandler = async (
+    _paymentMethod: PaymentMethod.Result,
+    _shouldSavePaymentMethod: boolean,
+    intentCreationCallback: any
+  ): Promise<void> => {
+    const message = `Error number ${errorCounter.current}`;
+    console.log(message);
+    intentCreationCallback({
+      error: {
+        code: 'Failed',
+        message,
+        localizedMessage: message,
+      }
+    });
+    errorCounter.current += 1;
+  }
+
   const initialisePaymentSheet = async (shippingDetails?: AddressDetails) => {
     const { paymentIntent, ephemeralKey, customer } =
       await fetchPaymentSheetParams();
@@ -96,23 +115,18 @@ export default function PaymentsUICompleteScreen() {
     const { error } = await initPaymentSheet({
       customerId: customer,
       customerEphemeralKeySecret: ephemeralKey,
-      paymentIntentClientSecret: paymentIntent,
-      customFlow: false,
       merchantDisplayName: 'Example Inc.',
-      applePay: { merchantCountryCode: 'US' },
-      style: 'automatic',
-      googlePay: {
-        merchantCountryCode: 'US',
-        testEnv: true,
-      },
-      returnURL: 'stripe-example://stripe-redirect',
       defaultBillingDetails: billingDetails,
-      defaultShippingDetails: shippingDetails,
-      allowsDelayedPaymentMethods: true,
-      appearance,
-      primaryButtonLabel: 'purchase!',
-      removeSavedPaymentMethodMessage: 'remove this payment method?',
-      preferredNetworks: [CardBrand.Amex, CardBrand.Visa],
+      returnURL: 'stripe-example://stripe-redirect',
+      primaryButtonLabel: 'purchase test!',
+      intentConfiguration: {
+        mode: {
+          amount: 4000,
+          currencyCode: 'usd',
+          setupFutureUsage: 'OnSession',
+        },
+        confirmHandler,
+      }
     });
     if (!error) {
       setPaymentSheetEnabled(true);
